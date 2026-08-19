@@ -457,15 +457,17 @@ def main():
         help="Streak threshold for Heavy Rain detection (default: 35.0).",
     )
     parser.add_argument(
-        "--show",
-        action="store_true",
-        default=True,
-        help="Display live GUI window with visual annotations.",
-    )
-    parser.add_argument(
         "--headless",
         action="store_true",
-        help="Disable GUI window and run in CLI headless mode.",
+        default=os.getenv("HEADLESS", "").lower() in ("1", "true", "yes"),
+        help="Run in headless mode without opening a GUI window (ideal for headless Linux/macOS servers). Can also set HEADLESS=1 env var.",
+    )
+    parser.add_argument(
+        "--show-gui",
+        dest="show_gui",
+        action="store_true",
+        default=False,
+        help="Explicitly open a live OpenCV GUI video stream window (requires a desktop display environment).",
     )
     
     # Home Assistant Options (Fallback to environment variables if set)
@@ -490,7 +492,19 @@ def main():
     
     args = parser.parse_args()
 
-    show_gui = args.show and not args.headless
+    # Detect headless server environment (missing DISPLAY / WAYLAND_DISPLAY environment variables on Linux/macOS)
+    has_display = bool(os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY") or sys.platform == "darwin")
+    
+    if args.headless or not has_display:
+        show_gui = False
+        logger.info("Execution Mode: HEADLESS SERVER (GUI window disabled).")
+    elif args.show_gui:
+        show_gui = True
+        logger.info("Execution Mode: GUI DISPLAY (Showing live video stream window).")
+    else:
+        # Default to headless if not specified explicitly via --show-gui
+        show_gui = False
+        logger.info("Execution Mode: HEADLESS SERVER (Use --show-gui to enable visual window).")
 
     logger.info("Initializing RTSP Rain Detector...")
     reader = RTSPStreamReader(args.rtsp).start()
@@ -512,6 +526,7 @@ def main():
         logger.info("Home Assistant integration disabled. Provide --ha-url and --ha-token to enable.")
 
     last_state = None
+    gui_failed = False
 
     try:
         while True:
@@ -537,17 +552,24 @@ def main():
                     avg_streaks=result["avg_streaks"],
                 )
 
-            if show_gui:
-                hud_frame = detector.draw_hud(frame, result, fps=reader.fps)
-                cv2.imshow("RTSP Rain Detector", hud_frame)
+            if show_gui and not gui_failed:
+                try:
+                    hud_frame = detector.draw_hud(frame, result, fps=reader.fps)
+                    cv2.imshow("RTSP Rain Detector", hud_frame)
 
-                # Press 'q' to quit, 'm' to show mask window
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q"):
-                    logger.info("User quit program.")
-                    break
-                elif key == ord("m"):
-                    cv2.imshow("Foreground Streak Mask", result["mask"])
+                    # Press 'q' to quit, 'm' to show mask window
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord("q"):
+                        logger.info("User quit program.")
+                        break
+                    elif key == ord("m"):
+                        cv2.imshow("Foreground Streak Mask", result["mask"])
+                except Exception as e:
+                    logger.warning(
+                        f"Unable to render OpenCV GUI window ({e}). Falling back to Headless mode."
+                    )
+                    gui_failed = True
+                    show_gui = False
             else:
                 time.sleep(0.01)
 
@@ -555,8 +577,11 @@ def main():
         logger.info("Keyboard interrupt received.")
     finally:
         reader.stop()
-        if show_gui:
-            cv2.destroyAllWindows()
+        if show_gui and not gui_failed:
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

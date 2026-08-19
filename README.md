@@ -80,13 +80,13 @@ The script automatically creates and manages a Home Assistant binary sensor:
 | Argument | Description | Default / Env Var |
 | :--- | :--- | :--- |
 | `--rtsp` | **(Required)** RTSP URL, video file path, or camera index | None |
+| `--headless` | Run in headless mode without opening GUI window (ideal for servers) | `True` (auto-detected on headless servers) / `HEADLESS` |
+| `--show-gui` | Explicitly display live OpenCV GUI window with visual HUD | `False` |
 | `--ha-url` | Home Assistant server base URL (e.g. `http://192.168.1.50:8123`) | `HA_URL` |
 | `--ha-token` | Home Assistant Long-Lived Access Token | `HA_TOKEN` |
 | `--ha-entity` | Home Assistant entity ID | `binary_sensor.webcam_rain_detector` / `HA_ENTITY_ID` |
 | `--threshold` | Average streak count threshold for `LIGHT RAIN` | `12.0` |
 | `--heavy-threshold` | Average streak count threshold for `HEAVY RAIN` | `35.0` |
-| `--show` | Show live GUI window with HUD telemetry overlay | `True` |
-| `--headless` | Run in headless mode without opening GUI window | `False` |
 
 ---
 
